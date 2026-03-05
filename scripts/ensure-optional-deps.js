@@ -6,7 +6,7 @@
 import { execSync } from 'child_process';
 
 try {
-  console.log('Installing optional dependencies...');
+  console.log('Installing optional Rollup dependencies...');
   execSync('npm install --include=optional @rollup/rollup-linux-x64-gnu', {
     stdio: 'inherit',
   });
