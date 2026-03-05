@@ -6,6 +6,17 @@ import { existsSync } from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Handle uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Don't exit - let the server try to continue
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - let the server try to continue
+});
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
@@ -47,21 +58,53 @@ if (!existsSync(buildDir)) {
   process.exit(1);
 }
 
-// Health check endpoint for Railway
+// Verify index.html exists
+const indexHtmlPath = join(buildDir, 'index.html');
+if (!existsSync(indexHtmlPath)) {
+  console.error(`ERROR: index.html not found at ${indexHtmlPath}`);
+  process.exit(1);
+}
+
+console.log(`Build directory verified: ${buildDir}`);
+console.log(`index.html verified: ${indexHtmlPath}`);
+
+// Health check endpoint for Railway (before static files)
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Serve static files from the build directory
-app.use(express.static(buildDir));
-
-// Handle SPA routing - serve index.html for all routes
-app.get('*', (req, res, next) => {
-  try {
-    res.sendFile(join(buildDir, 'index.html'));
-  } catch (err) {
-    next(err);
+app.use(express.static(buildDir, {
+  dotfiles: 'ignore',
+  etag: true,
+  extensions: false,
+  fallthrough: true,
+  immutable: false,
+  index: false, // Don't serve index.html automatically
+  lastModified: true,
+  maxAge: 0,
+  redirect: false,
+  setHeaders: (res, path) => {
+    // Set custom headers if needed
   }
+}));
+
+// Handle SPA routing - serve index.html for all non-file routes
+app.get('*', (req, res, next) => {
+  // Skip if this is a file request (should be handled by static middleware)
+  if (req.path.includes('.')) {
+    return res.status(404).send('Not found');
+  }
+  
+  console.log(`Serving index.html for route: ${req.path}`);
+  res.sendFile(indexHtmlPath, (err) => {
+    if (err) {
+      console.error(`Error serving index.html for ${req.path}:`, err);
+      if (!res.headersSent) {
+        res.status(500).send('Internal Server Error');
+      }
+    }
+  });
 });
 
 // Error handling middleware (must be last)
