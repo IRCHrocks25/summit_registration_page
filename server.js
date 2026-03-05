@@ -68,43 +68,24 @@ if (!existsSync(indexHtmlPath)) {
 console.log(`Build directory verified: ${buildDir}`);
 console.log(`index.html verified: ${indexHtmlPath}`);
 
-// Health check endpoint for Railway (before static files)
+// Health check endpoint for Railway
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Serve static files from the build directory
-app.use(express.static(buildDir, {
-  dotfiles: 'ignore',
-  etag: true,
-  extensions: false,
-  fallthrough: true,
-  immutable: false,
-  index: false, // Don't serve index.html automatically
-  lastModified: true,
-  maxAge: 0,
-  redirect: false,
-  setHeaders: (res, path) => {
-    // Set custom headers if needed
-  }
-}));
+// Serve static files from the build directory (CSS, JS, images, etc.)
+app.use(express.static(buildDir));
 
-// Handle SPA routing - serve index.html for all non-file routes
-app.get('*', (req, res, next) => {
-  // Skip if this is a file request (should be handled by static middleware)
-  if (req.path.includes('.')) {
-    return res.status(404).send('Not found');
-  }
-  
+// Root route - serve index.html
+app.get('/', (req, res) => {
+  console.log('Serving index.html for root route');
+  res.sendFile(indexHtmlPath);
+});
+
+// Handle SPA routing - serve index.html for all other routes
+app.get('*', (req, res) => {
   console.log(`Serving index.html for route: ${req.path}`);
-  res.sendFile(indexHtmlPath, (err) => {
-    if (err) {
-      console.error(`Error serving index.html for ${req.path}:`, err);
-      if (!res.headersSent) {
-        res.status(500).send('Internal Server Error');
-      }
-    }
-  });
+  res.sendFile(indexHtmlPath);
 });
 
 // Error handling middleware (must be last)
