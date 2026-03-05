@@ -17,6 +17,12 @@ const ALLOWED_HOSTS = [
   '127.0.0.1',
 ];
 
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Host: ${req.get('host') || 'unknown'}`);
+  next();
+});
+
 // Host logging middleware (non-blocking to avoid 502/healthcheck issues)
 app.use((req, res, next) => {
   const host = req.get('host') || '';
@@ -26,7 +32,7 @@ app.use((req, res, next) => {
     ALLOWED_HOSTS.includes(hostname) ||
     ALLOWED_HOSTS.some((allowed) => host.includes(allowed));
 
-  if (!isAllowed) {
+  if (!isAllowed && req.path !== '/health') {
     console.warn(`Request from unexpected host: host=${host}, hostname=${hostname}`);
   }
 
@@ -41,23 +47,48 @@ if (!existsSync(buildDir)) {
   process.exit(1);
 }
 
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Serve static files from the build directory
 app.use(express.static(buildDir));
 
 // Handle SPA routing - serve index.html for all routes
-app.get('*', (req, res) => {
-  res.sendFile(join(buildDir, 'index.html'));
+app.get('*', (req, res, next) => {
+  try {
+    res.sendFile(join(buildDir, 'index.html'));
+  } catch (err) {
+    next(err);
+  }
 });
 
-// Error handling middleware
+// Error handling middleware (must be last)
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
-  res.status(500).send('Internal Server Error');
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 // Start server - bind to 0.0.0.0 so Railway can reach it
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`Server is running on ${HOST}:${PORT}`);
   console.log(`Build directory: ${buildDir}`);
+  console.log(`Health check available at http://${HOST}:${PORT}/health`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('Server error:', err);
+  process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
