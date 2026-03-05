@@ -1,12 +1,14 @@
 import express from 'express';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0'; // Bind to all interfaces for Railway
 
 // Allowed hosts (for logging/monitoring only – not blocking)
 const ALLOWED_HOSTS = [
@@ -31,15 +33,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// Check if build directory exists
+const buildDir = join(__dirname, 'build');
+if (!existsSync(buildDir)) {
+  console.error(`ERROR: Build directory not found at ${buildDir}`);
+  console.error('Please run "npm run build" before starting the server.');
+  process.exit(1);
+}
+
 // Serve static files from the build directory
-app.use(express.static(join(__dirname, 'build')));
+app.use(express.static(buildDir));
 
 // Handle SPA routing - serve index.html for all routes
 app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, 'build', 'index.html'));
+  res.sendFile(join(buildDir, 'index.html'));
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).send('Internal Server Error');
+});
+
+// Start server - bind to 0.0.0.0 so Railway can reach it
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running on ${HOST}:${PORT}`);
+  console.log(`Build directory: ${buildDir}`);
 });
 
