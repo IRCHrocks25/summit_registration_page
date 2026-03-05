@@ -8,28 +8,27 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Allowed hosts
+// Allowed hosts (for logging/monitoring only – not blocking)
 const ALLOWED_HOSTS = [
   'summitregistrationpage-production.up.railway.app',
   'localhost',
   '127.0.0.1',
 ];
 
-// Host validation middleware
+// Host logging middleware (non-blocking to avoid 502/healthcheck issues)
 app.use((req, res, next) => {
-  const host = req.get('host');
-  const hostname = req.hostname;
-  
-  // Allow requests from allowed hosts or local development
-  if (
+  const host = req.get('host') || '';
+  const hostname = req.hostname || '';
+
+  const isAllowed =
     ALLOWED_HOSTS.includes(hostname) ||
-    ALLOWED_HOSTS.some(allowed => host?.includes(allowed)) ||
-    process.env.NODE_ENV !== 'production'
-  ) {
-    next();
-  } else {
-    res.status(403).send('Forbidden: Invalid host');
+    ALLOWED_HOSTS.some((allowed) => host.includes(allowed));
+
+  if (!isAllowed) {
+    console.warn(`Request from unexpected host: host=${host}, hostname=${hostname}`);
   }
+
+  next();
 });
 
 // Serve static files from the build directory
