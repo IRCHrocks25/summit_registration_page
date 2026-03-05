@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "prebuild": "node scripts/ensure-optional-deps.js",
     "build": "node node_modules/vite/bin/vite.js build",
     "dev": "vite",
     "start": "node server.js"
